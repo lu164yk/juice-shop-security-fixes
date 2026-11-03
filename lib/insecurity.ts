@@ -147,7 +147,7 @@ export const roles = {
 }
 
 export const deluxeToken = (email: string) => {
-  const hmac = crypto.createHmac('sha256', privateKey)
+  const hmac = crypto.createHmac('sha256', process.env.HMAC_SECRET || 'secure_fallback_key')
   return hmac.update(email + roles.deluxe).digest('hex')
 }
 
