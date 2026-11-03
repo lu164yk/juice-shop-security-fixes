@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2014-2026 Bjoern Kimminich & the OWASP Juice Shop contributors.
  * SPDX-License-Identifier: MIT
@@ -19,7 +20,15 @@ export function captchas () {
     const secondOperator = operators[Math.floor((Math.random() * 3))]
 
     const expression = firstTerm.toString() + firstOperator + secondTerm.toString() + secondOperator + thirdTerm.toString()
-    const answer = eval(expression).toString() // eslint-disable-line no-eval
+    const parts = expression.split(' ');
+    const num1 = parseInt(parts[0], 10);
+    const operator = parts[1];
+    const num2 = parseInt(parts[2], 10);
+    let calcAnswer;
+    if (operator === '+') calcAnswer = num1 + num2;
+    else if (operator === '-') calcAnswer = num1 - num2;
+    else if (operator === '*') calcAnswer = num1 * num2;
+    const answer = calcAnswer.toString();
 
     const captcha = {
       captchaId,
