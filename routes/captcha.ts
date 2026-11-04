@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2014-2026 Bjoern Kimminich & the OWASP Juice Shop contributors.
  * SPDX-License-Identifier: MIT
@@ -21,6 +22,7 @@ export function captchas () {
     const expression = firstTerm.toString() + firstOperator + secondTerm.toString() + secondOperator + thirdTerm.toString()
     const sanitized = String(expression).replace(/[^0-9+\-*/.]/g, '')
     const answer = Function(`'use strict'; return (${sanitized})`)().toString()
+
 
     const captcha = {
       captchaId,
