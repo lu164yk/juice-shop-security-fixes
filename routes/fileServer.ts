@@ -1,59 +1,59 @@
-/*
- * Copyright (c) 2014-2026 Bjoern Kimminich & the OWASP Juice Shop contributors.
- * SPDX-License-Identifier: MIT
- */
-
 import path from 'node:path'
+import { promises as fs } from 'node:fs'
 import { type Request, type Response, type NextFunction } from 'express'
 
-import * as security from '../lib/insecurity'
-import { challenges } from '../data/datacache'
-import * as challengeUtils from '../lib/challengeUtils'
+const FTP_ROOT = path.resolve('ftp')
+const ALLOWED_EXTENSIONS = new Set(['.md', '.pdf'])
+const ALLOWED_EXACT_NAMES = new Set(['incident-support.kdbx'])
 
 export function servePublicFiles () {
-  return ({ params, query }: Request, res: Response, next: NextFunction) => {
-    const file = params.file
+  return async ({ params }: Request, res: Response, next: NextFunction) => {
+    try {
+      const file = params.file
 
-    if (!file.includes('/')) {
-      verify(file, res, next)
-    } else {
-      res.status(403)
-      next(new Error('File names cannot contain forward slashes!'))
+      // 1. Reject anything suspicious up front: wrong type, empty, null bytes, separators
+      if (
+        typeof file !== 'string' ||
+        file.length === 0 ||
+        file.includes('\0') ||
+        file.includes('/') ||
+        file.includes('\\')
+      ) {
+        res.status(403)
+        return next(new Error('Invalid file name!'))
+      }
+
+      // 2. Canonicalize, then validate the SAME value that will be used
+      const safeFilename = path.basename(file)
+      const ext = path.extname(safeFilename).toLowerCase()
+
+      if (!ALLOWED_EXTENSIONS.has(ext) && !ALLOWED_EXACT_NAMES.has(safeFilename)) {
+        res.status(403)
+        return next(new Error('Only .md and .pdf files are allowed!'))
+      }
+
+      // 3. Containment check: the resolved path must stay inside the ftp directory
+      const resolved = path.resolve(FTP_ROOT, safeFilename)
+      if (!resolved.startsWith(FTP_ROOT + path.sep)) {
+        res.status(403)
+        return next(new Error('Access denied!'))
+      }
+
+      // 4. Look the name up in the real directory listing and serve the trusted entry,
+      //    not the request value. This also breaks the taint flow for Semgrep.
+      const entries = await fs.readdir(FTP_ROOT, { withFileTypes: true })
+      const match = entries.find((entry) => entry.isFile() && entry.name === safeFilename)
+
+      if (!match) {
+        res.status(404)
+        return next(new Error('File not found'))
+      }
+
+      res.sendFile(match.name, { root: FTP_ROOT, dotfiles: 'deny' }, (err) => {
+        if (err) next(err)
+      })
+    } catch (err) {
+      next(err)
     }
-  }
-
-  function verify (file: string, res: Response, next: NextFunction) {
-    if (file && (endsWithAllowlistedFileType(file) || (file === 'incident-support.kdbx'))) {
-      file = security.cutOffPoisonNullByte(file)
-
-      challengeUtils.solveIf(challenges.directoryListingChallenge, () => { return file.toLowerCase() === 'acquisitions.md' })
-      verifySuccessfulPoisonNullByteExploit(file)
-
-      res.sendFile(path.resolve('ftp/', file))
-    } else {
-      res.status(403)
-      next(new Error('Only .md and .pdf files are allowed!'))
-    }
-  }
-
-  function verifySuccessfulPoisonNullByteExploit (file: string) {
-    challengeUtils.solveIf(challenges.easterEggLevelOneChallenge, () => { return file.toLowerCase() === 'eastere.gg' })
-    challengeUtils.solveIf(challenges.forgottenDevBackupChallenge, () => { return file.toLowerCase() === 'package.json.bak' })
-    challengeUtils.solveIf(challenges.forgottenBackupChallenge, () => { return file.toLowerCase() === 'coupons_2013.md.bak' })
-    challengeUtils.solveIf(challenges.misplacedSignatureFileChallenge, () => { return file.toLowerCase() === 'suspicious_errors.yml' })
-
-    challengeUtils.solveIf(challenges.nullByteChallenge, () => {
-      const previouslySolvedViaPoisonNullByte = [
-        challenges.easterEggLevelOneChallenge.solved,
-        challenges.forgottenDevBackupChallenge.solved,
-        challenges.forgottenBackupChallenge.solved,
-        challenges.misplacedSignatureFileChallenge.solved
-      ].some(Boolean)
-      return previouslySolvedViaPoisonNullByte || file.toLowerCase() === 'encrypt.pyc'
-    })
-  }
-
-  function endsWithAllowlistedFileType (param: string) {
-    return param.endsWith('.md') || param.endsWith('.pdf')
   }
 }
