@@ -12,9 +12,10 @@ export function orderHistory () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const loggedInUser = security.authenticatedUsers.get(req.headers?.authorization?.replace('Bearer ', ''))
     if (loggedInUser?.data?.email && loggedInUser.data.id) {
-      const email = loggedInUser.data.email
+      const email = String(loggedInUser.data.email)
       const updatedEmail = email.replace(/[aeiou]/gi, '*')
-      const order = await ordersCollection.find({ email: updatedEmail })
+      // Use $eq to ensure updatedEmail is interpreted as a literal value, preventing NoSQL injection
+      const order = await ordersCollection.find({ email: { $eq: String(updatedEmail) } })
       res.status(200).json({ status: 'success', data: order })
     } else {
       next(new Error('Blocked illegal activity by ' + req.socket.remoteAddress))
@@ -33,7 +34,9 @@ export function toggleDeliveryStatus () {
   return async (req: Request, res: Response, next: NextFunction) => {
     const deliveryStatus = !req.body.deliveryStatus
     const eta = deliveryStatus ? '0' : '1'
-    await ordersCollection.update({ _id: req.params.id }, { $set: { delivered: deliveryStatus, eta } })
+    const id = String(req.params.id)
+    // Use $eq with explicit string cast to prevent query operator injection
+    await ordersCollection.update({ _id: { $eq: id } }, { $set: { delivered: deliveryStatus, eta } })
     res.status(200).json({ status: 'success' })
   }
 }

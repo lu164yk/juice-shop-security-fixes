@@ -20,15 +20,9 @@ export function captchas () {
     const secondOperator = operators[Math.floor((Math.random() * 3))]
 
     const expression = firstTerm.toString() + firstOperator + secondTerm.toString() + secondOperator + thirdTerm.toString()
-    const parts = expression.split(' ');
-    const num1 = parseInt(parts[0], 10);
-    const operator = parts[1];
-    const num2 = parseInt(parts[2], 10);
-    let calcAnswer;
-    if (operator === '+') calcAnswer = num1 + num2;
-    else if (operator === '-') calcAnswer = num1 - num2;
-    else if (operator === '*') calcAnswer = num1 * num2;
-    const answer = calcAnswer.toString();
+    const sanitized = String(expression).replace(/[^0-9+\-*/.]/g, '')
+    const answer = Function(`'use strict'; return (${sanitized})`)().toString()
+
 
     const captcha = {
       captchaId,
